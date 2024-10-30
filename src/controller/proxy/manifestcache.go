@@ -85,8 +85,15 @@ func (m *ManifestListCache) CacheContent(ctx context.Context, _ string, man dist
 	if err := m.cache.Save(ctx, key, payload, manifestListCacheInterval); err != nil {
 		log.Errorf("failed to cache payload, error %v", err)
 	}
-	if err := m.push(ctx, art.Repository, getReference(art), man); err != nil {
-		log.Errorf("error when push manifest list to local :%v", err)
+	if len(art.Digest) > 0 {
+		if err := m.push(ctx, art.Repository, art.Digest, man); err != nil {
+			log.Errorf("error when push manifest list with digest to local :%v", err)
+		}
+	}
+	if len(art.Tag) > 0 {
+		if err := m.push(ctx, art.Repository, art.Tag, man); err != nil {
+			log.Errorf("error when push manifest list with tag to local :%v", err)
+		}
 	}
 }
 
@@ -198,9 +205,17 @@ func (m *ManifestCache) CacheContent(ctx context.Context, remoteRepo string, man
 			}
 		}
 	}
-	err := m.local.PushManifest(art.Repository, getReference(art), man)
-	if err != nil {
-		log.Errorf("failed to push manifest, tag: %v, error %v", art.Tag, err)
+	if len(art.Digest) > 0 {
+		err := m.local.PushManifest(art.Repository, art.Digest, man)
+		if err != nil {
+			log.Errorf("failed to push manifest with digest ref, tag: %v, digest: %v, error %v", art.Tag, art.Digest, err)
+		}
+	}
+	if len(art.Tag) > 0 {
+		err := m.local.PushManifest(art.Repository, art.Tag, man)
+		if err != nil {
+			log.Errorf("failed to push manifest with tag ref, tag: %v, digest: %v, error %v", art.Tag, art.Digest, err)
+		}
 	}
 }
 

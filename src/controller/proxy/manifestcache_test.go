@@ -28,6 +28,7 @@ import (
 
 	"github.com/goharbor/harbor/src/controller/artifact"
 	"github.com/goharbor/harbor/src/lib"
+	"github.com/goharbor/harbor/src/testing/lib/cache"
 	"github.com/goharbor/harbor/src/testing/mock"
 )
 
@@ -149,6 +150,80 @@ func (suite *CacheTestSuite) TestPushManifestList() {
 
 	err = suite.mHandler.push(ctx, "library/hello-world", string(originDigest), manList)
 	suite.Require().Nil(err)
+}
+
+func (suite *CacheTestSuite) TestCacheContent() {
+	defer suite.local.AssertExpectations(suite.T())
+
+	c := cache.NewCache(suite.T())
+	suite.mHandler.cache = c
+
+	ctx := context.Background()
+	amdDig := "sha256:1a9ec845ee94c202b2d5da74a24f0ed2058318bfa9879fa541efaecba272e86b"
+	armDig := "sha256:92c7f9c92844bbbb5d0a101b22f7c2a7949e40f8ea90c8b3bc396879d95e899a"
+	manifests := []manifestlist.ManifestDescriptor{
+		{
+			Descriptor: distribution.Descriptor{
+				Digest:    digest.Digest(amdDig),
+				Size:      3253,
+				MediaType: schema2.MediaTypeManifest,
+			},
+			Platform: manifestlist.PlatformSpec{
+				Architecture: "amd64",
+				OS:           "linux",
+			},
+		}, {
+			Descriptor: distribution.Descriptor{
+				Digest:    digest.Digest(armDig),
+				Size:      3253,
+				MediaType: schema2.MediaTypeManifest,
+			},
+			Platform: manifestlist.PlatformSpec{
+				Architecture: "arm",
+				OS:           "linux",
+			},
+		},
+	}
+	manifestList, err := manifestlist.FromDescriptors(manifests)
+	suite.Nil(err)
+	_, payload, err := manifestList.Payload()
+	suite.Nil(err)
+	manListDigest := digest.FromBytes(payload)
+	repo := "library/hello-world"
+	artInfoTag := lib.ArtifactInfo{
+		Repository: repo,
+		Digest:     "",
+		Tag:        "latest",
+	}
+	artInfoDigest := lib.ArtifactInfo{
+		Repository: repo,
+		Digest:     "",
+		Tag:        string(manListDigest),
+	}
+	artInfoAMD := lib.ArtifactInfo{
+		Repository: repo,
+		Digest:     amdDig,
+		Tag:        "",
+	}
+	artInfoARM := lib.ArtifactInfo{
+		Repository: repo,
+		Digest:     armDig,
+		Tag:        "",
+	}
+	ar := &artifact.Artifact{}
+
+	c.On("Save", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	suite.local.On("GetManifest", ctx, artInfoAMD).Times(2).Return(ar, nil)
+	suite.local.On("GetManifest", ctx, artInfoARM).Times(2).Return(ar, nil)
+
+	suite.local.On("GetManifest", ctx, artInfoDigest).Times(1).Return(nil, nil)
+	suite.local.On("GetManifest", ctx, artInfoTag).Times(1).Return(nil, nil)
+
+	suite.local.On("PushManifest", repo, string(manListDigest), mock.Anything).Times(1).Return(nil)
+	suite.local.On("PushManifest", repo, "latest", mock.Anything).Times(1).Return(nil)
+
+	suite.mHandler.CacheContent(ctx, "", manifestList, artInfoTag, nil, "ct")
 }
 
 func TestCacheTestSuite(t *testing.T) {
