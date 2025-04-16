@@ -202,7 +202,7 @@ func (m *ManifestCache) CacheContent(ctx context.Context, remoteRepo string, man
 
 	err := m.push(art, man)
 	if err != nil {
-		log.Errorf("error occured on manifest push to local: %v", err)
+		log.Errorf("error occurred on manifest push to local: %v", err)
 	}
 }
 
